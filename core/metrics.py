@@ -12,13 +12,12 @@ The collector is fed a :class:`RequestResult` per completed request. It keeps:
 from __future__ import annotations
 
 import random
-import statistics
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-from .models import ErrorKind, RequestResult
+from .models import RequestResult
 
 # Fixed ceilings -> memory stays flat no matter how long the test runs.
 _RESERVOIR_SIZE = 100_000

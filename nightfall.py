@@ -21,8 +21,6 @@ import sys
 from pathlib import Path
 
 from core.models import (
-    DEFAULT_CONNECT_TIMEOUT,
-    DEFAULT_REQUEST_TIMEOUT,
     LoadConfig,
     Method,
     TestConfig,

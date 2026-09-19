@@ -6,9 +6,8 @@ by ``rich.live.Live`` at a modest refresh rate without flooding the terminal.
 """
 from __future__ import annotations
 
-from typing import Optional
 
-from rich.align import Align
+
 from rich.columns import Columns
 from rich.console import Group
 from rich.panel import Panel

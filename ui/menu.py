@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from rich.align import Align
-from rich.console import Console, Group
+from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
@@ -22,14 +21,9 @@ from core.models import (
     TestConfig,
     parse_target,
 )
-from core.models import (
-    DEFAULT_DURATION,
-    DEFAULT_RAMP_UP,
-    DEFAULT_RPS,
-    DEFAULT_USERS,
-)
+from core.models import DEFAULT_RPS
 from export import export_all
-from ui.theme import AUTHORIZATION_NOTICE, startup_panel
+from ui.theme import AUTHORIZATION_NOTICE
 
 # Presets (spec section 21): (users, duration, rps, ramp_up)
 PROFILES = {

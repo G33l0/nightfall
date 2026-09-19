@@ -5,7 +5,6 @@ engine, UI and export layers share a single, typed source of truth.
 """
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional

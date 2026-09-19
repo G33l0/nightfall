@@ -106,7 +106,6 @@ class LoadTestEngine:
             limit=load.users,
             limit_per_host=load.users,
             ttl_dns_cache=300,
-            enable_cleanup_closed=True,
         )
         limiter = RateLimiter(load.rps)
         semaphore = asyncio.Semaphore(load.users)
