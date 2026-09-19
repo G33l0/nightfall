@@ -1,0 +1,5 @@
+# NIGHTFALL // LOAD TESTER — runtime dependencies
+# Python 3.13+ recommended (works on 3.11+)
+
+aiohttp>=3.9,<4.0
+rich>=13.7
