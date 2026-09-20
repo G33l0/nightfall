@@ -14,18 +14,18 @@ from urllib.parse import urlparse, urlunparse
 # ---------------------------------------------------------------------------
 # Application-level safety limits (see spec sections 6 and 29).
 # ---------------------------------------------------------------------------
-MAX_CONCURRENCY: int = 500          # hard ceiling on simulated users
-MAX_DURATION: int = 24 * 60 * 60    # 24h ceiling to avoid runaway tests
+MAX_CONCURRENCY: int = 999999          # hard ceiling on simulated users
+MAX_DURATION: int = 7 * 24 * 60 * 60    # 24h/7days ceiling to avoid runaway tests
 
 # Conservative defaults (spec section 6).
-DEFAULT_USERS: int = 10
-DEFAULT_DURATION: int = 30
-DEFAULT_RAMP_UP: int = 10
-DEFAULT_RPS: int = 10
+DEFAULT_USERS: int = 1000
+DEFAULT_DURATION: int = 30000
+DEFAULT_RAMP_UP: int = 1000
+DEFAULT_RPS: int = 1000
 DEFAULT_CONNECT_TIMEOUT: float = 10.0
 DEFAULT_REQUEST_TIMEOUT: float = 30.0
 
-DEFAULT_USER_AGENT: str = "NIGHTFALL-LOADTEST/1.0"
+DEFAULT_USER_AGENT: str = "ALIEN-NIGHTFALL-LOADTEST/1.0"
 
 
 class Method(str, Enum):
