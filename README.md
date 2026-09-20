@@ -59,6 +59,8 @@ Its only purpose is measuring the performance of an authorized target.
 - Latency stats: min, avg, P50, P90, P95, P99, max (bounded memory)
 - Neutral, factual observations (no "your site can handle N users" claims)
 - Export to JSON / CSV / TXT (sensitive data never written to disk)
+- Optional single explicit proxy you supply (`--proxy`); credentials redacted
+- Horizontal scale: merge JSON reports from multiple nodes you own (`--merge`)
 - Interactive **and** command-line modes
 
 ---
@@ -144,6 +146,7 @@ Optional arguments:
 | `--connect-timeout S` | Connection timeout |
 | `--proxy URL` | Route through a single explicit proxy you supply (e.g. `http://user:pass@host:port`) |
 | `--requests-per-user N` | Requests per user (`0` = unlimited) |
+| `--merge R1.json R2.json …` | Merge JSON reports from multiple nodes into one aggregate summary (runs no test) |
 | `--export [all\|json\|csv\|txt]` | Export after the run |
 | `--yes`, `-y` | Affirm authorization non-interactively |
 | `--no-live` | Disable the live dashboard (for logs / CI) |
@@ -273,9 +276,71 @@ ulimit -n 65535        # for the current shell, before launching NIGHTFALL
 
 Concurrency is bounded by your machine's CPU, memory, file descriptors and
 network — a single host cannot honestly sustain arbitrarily large numbers. For
-genuinely large-scale or geographically distributed load, run NIGHTFALL (or a
-dedicated tool such as k6, Locust or JMeter) from multiple load generators you
-own, rather than increasing the count on one machine.
+genuinely large-scale or geographically distributed load, scale **horizontally**
+across multiple load generators you own (below), rather than increasing the
+count on one machine.
+
+---
+
+## Horizontal scale (multiple nodes)
+
+To go beyond what one host can do, run NIGHTFALL on several load generators you
+own and merge their results. Each node runs independently — its own real IP, its
+own authorization confirmation, and the same per-node safety ceiling — so this
+is transparent distributed load, not an anonymising proxy pool.
+
+1. **Run a node on each host**, exporting JSON. For example, on host A and B:
+
+   ```bash
+   # host A
+   python nightfall.py --url https://you.example.com \
+       --users 2000 --duration 120 --ramp-up 30 --rps 1000 \
+       --export json --yes --no-live
+
+   # host B (same target, same window)
+   python nightfall.py --url https://you.example.com \
+       --users 2000 --duration 120 --ramp-up 30 --rps 1000 \
+       --export json --yes --no-live
+   ```
+
+2. **Collect each node's `results/test_*.json`** onto one machine.
+
+3. **Merge them into one aggregate report:**
+
+   ```bash
+   python nightfall.py --merge nodeA.json nodeB.json nodeC.json --export
+   ```
+
+   The merged view sums requests, successes/failures, bytes, status codes and
+   errors; reports aggregate average throughput and the sum of per-node peak
+   RPS; and gives request-weighted **approximate** pooled latency percentiles
+   (exact percentiles can't be reconstructed from per-node summaries). The
+   merged report is written to `results/merged_<timestamp>.json`.
+
+`--merge` runs no test and opens no connection — it is a pure, offline analysis
+step. This is the supported way to reach high, distributed scale; NIGHTFALL does
+not raise single-host concurrency to attack volumes or coordinate traffic to
+overwhelm a target.
+
+---
+
+## Safety ceilings and guardrails
+
+NIGHTFALL is deliberately bounded so it stays a measurement tool, not a
+denial-of-service tool. The guardrails are:
+
+| Guardrail | What it does | Where |
+|-----------|--------------|-------|
+| `MAX_CONCURRENCY = 5000` | Hard ceiling on concurrent users; higher values are clamped | `core/models.py` |
+| `MAX_DURATION = 24h` | Ceiling on test duration | `core/models.py` |
+| Conservative defaults (10 users / 30 s / 10 s ramp / 10 RPS) | Never defaults to high traffic | `core/models.py` |
+| `LoadConfig.clamp()` | Enforces every min/max and reports what it changed | `core/models.py` |
+| Global RPS rate limiter | Caps aggregate requests/sec; starts empty so no start-up spike | `core/limiter.py` |
+| Bounded worker pool + `asyncio.Semaphore` | Exactly `users` tasks/connections — never an unbounded task set | `core/engine.py` |
+| Duration deadline + graceful stop | Every worker stops at the deadline or on stop; no runaway | `core/engine.py`, `core/worker.py` |
+| Authorization confirmation before every test | Requires an explicit `Y` (or `--yes`) naming target, users, duration | `ui/menu.py` |
+| Neutral reporting | No "can handle N users" claims; states synthetic-traffic caveats | `core/engine.py` |
+| No evasion by design | No proxy fetching/rotation, no fingerprint randomisation, single explicit proxy only | throughout |
 
 ---
 
@@ -332,7 +397,8 @@ nightfall/
 ├── export/
 │   ├── json_export.py
 │   ├── csv_export.py
-│   └── text_export.py
+│   ├── text_export.py
+│   └── merge.py          # merge multi-node JSON reports (horizontal scale)
 └── results/              # exported reports (git-ignored)
 ```
 
