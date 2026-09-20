@@ -8,7 +8,6 @@ from __future__ import annotations
 
 
 
-from rich.columns import Columns
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -72,10 +71,33 @@ def _bar_graph(series: list[int], height: int = 8, width: int = 30) -> Text:
 class Dashboard:
     """Renders live metrics for a running test."""
 
-    def __init__(self, metrics: MetricsCollector, target_url: str, duration: int) -> None:
+    def __init__(
+        self,
+        metrics: MetricsCollector,
+        target_url: str,
+        duration: int,
+        console=None,
+    ) -> None:
         self.m = metrics
         self.target_url = target_url
         self.duration = duration
+        self._console = console
+
+    def _term_width(self) -> int:
+        if self._console is not None:
+            try:
+                return self._console.width
+            except Exception:
+                pass
+        return 80
+
+    def _graph_slots(self) -> int:
+        """Number of bars/points a graph should draw for the current width."""
+        width = self._term_width()
+        # Two-column layout roughly halves the space available to each graph.
+        avail = width // 2 if width >= 88 else width
+        # Each bar uses 2 cells; leave room for the axis label and borders.
+        return max(8, min(30, (avail - 12) // 2))
 
     # -- individual panels -------------------------------------------------
     def _summary_panel(self, status: str) -> Panel:
@@ -148,16 +170,19 @@ class Dashboard:
         return Panel(table, title="[nf.accent]HTTP STATUS[/]", border_style="nf.panel")
 
     def _rps_graph_panel(self) -> Panel:
-        series = self.m.rps_series(width=30)
+        slots = self._graph_slots()
+        height = 8 if self._term_width() >= 60 else 5
+        series = self.m.rps_series(width=slots)
         return Panel(
-            _bar_graph(series, height=8, width=30),
+            _bar_graph(series, height=height, width=slots),
             title="[nf.accent]REQUESTS / SEC[/]",
             border_style="nf.panel",
         )
 
     def _latency_graph_panel(self) -> Panel:
         window = self.m.latency_window()
-        spark = _sparkline(window, width=48)
+        spark_width = max(12, min(64, self._graph_slots() * 2))
+        spark = _sparkline(window, width=spark_width)
         live = self.m.live_latency_stats()
         body = Text()
         body.append(spark or "(collecting data...)", style="nf.accent")
@@ -215,12 +240,26 @@ class Dashboard:
 
     # -- top-level assembly ------------------------------------------------
     def build(self, status: str = "RUNNING", paused: bool = False) -> Group:
-        left = Group(self._summary_panel(status), self._events_panel())
-        right = Group(
-            self._rps_graph_panel(),
-            self._latency_graph_panel(),
-            self._status_breakdown_panel(),
-            self._errors_panel(),
-        )
-        columns = Columns([left, right], expand=True, equal=True)
-        return Group(columns, self._controls_panel(paused))
+        summary = self._summary_panel(status)
+        events = self._events_panel()
+        rps = self._rps_graph_panel()
+        latency = self._latency_graph_panel()
+        codes = self._status_breakdown_panel()
+        errors = self._errors_panel()
+        controls = self._controls_panel(paused)
+
+        # Two side-by-side columns need room; otherwise stack everything in a
+        # single column so nothing is truncated on narrow screens (e.g. Termux).
+        # Table.grid reliably places two column groups side by side (Columns
+        # leaves the second group blank for large renderables).
+        if self._term_width() >= 88:
+            left = Group(summary, events)
+            right = Group(rps, latency, codes, errors)
+            grid = Table.grid(expand=True, padding=(0, 1))
+            grid.add_column(ratio=1)
+            grid.add_column(ratio=1)
+            grid.add_row(left, right)
+            body: object = grid
+        else:
+            body = Group(summary, rps, latency, codes, errors, events)
+        return Group(body, controls)
