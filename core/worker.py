@@ -33,6 +33,12 @@ def classify_exception(exc: BaseException) -> tuple[ErrorKind, str]:
     if isinstance(exc, aiohttp.ClientConnectorSSLError):
         return ErrorKind.SSL_ERROR, name
 
+    # Proxy-specific failures (a proxy is configured but unreachable / erroring).
+    if isinstance(exc, getattr(aiohttp, "ClientProxyConnectionError", ())):
+        return ErrorKind.CONNECTION_REFUSED, name
+    if isinstance(exc, getattr(aiohttp, "ClientHttpProxyError", ())):
+        return ErrorKind.OTHER, name
+
     # DNS failures surface as ClientConnectorError wrapping a gaierror.
     if isinstance(exc, aiohttp.ClientConnectorError):
         os_err = getattr(exc, "os_error", None)
@@ -177,6 +183,7 @@ class Worker:
                     self._target.url,
                     data=data,
                     headers=self._load.headers or None,
+                    proxy=self._load.proxy,
                 ) as resp:
                     # Drain the body so latency reflects a full response, but do
                     # not retain it (we never store response bodies — spec 14).

@@ -13,7 +13,7 @@ from urllib.parse import urlparse, urlunparse
 # ---------------------------------------------------------------------------
 # Application-level safety limits (see spec sections 6 and 29).
 # ---------------------------------------------------------------------------
-MAX_CONCURRENCY: int = 500          # hard ceiling on simulated users
+MAX_CONCURRENCY: int = 5_000        # hard ceiling on simulated users
 MAX_DURATION: int = 24 * 60 * 60    # 24h ceiling to avoid runaway tests
 
 # Conservative defaults (spec section 6).
@@ -97,6 +97,10 @@ class LoadConfig:
     method: Method = Method.GET
     body: Optional[str] = None               # JSON string for POST
     headers: dict[str, str] = field(default_factory=dict)
+    # A single, explicit forward proxy the tester supplies and is authorized to
+    # use (e.g. a corporate egress proxy or their own load generator). Routed
+    # transparently as-is; NIGHTFALL does not fetch, harvest or rotate proxies.
+    proxy: Optional[str] = None
 
     def clamp(self) -> list[str]:
         """Enforce safety limits, returning a list of human-readable notes."""
@@ -203,3 +207,31 @@ def parse_target(raw: str) -> TargetConfig:
         port=port,
         path=path,
     )
+
+
+def validate_proxy(raw: str) -> str:
+    """Validate a single, user-supplied forward-proxy URL.
+
+    Accepts http:// or https:// proxy URLs (optionally with user:pass@host:port).
+    Returns the normalised proxy URL. Raises ValueError on anything malformed.
+
+    NIGHTFALL only ever uses one explicit proxy that the tester provides; it
+    never fetches, harvests or rotates proxies.
+    """
+    if not raw or not raw.strip():
+        raise ValueError("Proxy URL cannot be empty.")
+    candidate = raw.strip()
+    if "://" not in candidate:
+        candidate = "http://" + candidate
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"Unsupported proxy scheme '{parsed.scheme}'. Use http:// or https://."
+        )
+    if not parsed.hostname:
+        raise ValueError("Proxy URL must include a host.")
+    try:
+        _ = parsed.port  # triggers ValueError on a bad port
+    except ValueError as exc:
+        raise ValueError("Invalid port in proxy URL.") from exc
+    return candidate

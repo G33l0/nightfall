@@ -25,6 +25,7 @@ from core.models import (
     Method,
     TestConfig,
     parse_target,
+    validate_proxy,
 )
 from ui import menu
 from ui.runner import run_test
@@ -57,6 +58,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--connect-timeout", type=float, dest="connect_timeout",
         help="Connection timeout in seconds.",
+    )
+    p.add_argument(
+        "--proxy",
+        metavar="URL",
+        help=(
+            "Route requests through a single explicit forward proxy you supply "
+            "and are authorized to use (e.g. http://user:pass@host:port). "
+            "NIGHTFALL never fetches, harvests or rotates proxies."
+        ),
     )
     p.add_argument("--requests-per-user", type=int, dest="requests_per_user",
                    help="Requests per user (0 = unlimited).")
@@ -104,6 +114,8 @@ def _load_from_args(args: argparse.Namespace) -> LoadConfig:
         if ":" in raw:
             name, _, value = raw.partition(":")
             load.headers[name.strip()] = value.strip()
+    if getattr(args, "proxy", None):
+        load.proxy = validate_proxy(args.proxy)
     return load
 
 
@@ -135,7 +147,11 @@ async def run_cli(args: argparse.Namespace) -> int:
         console.print(f"[nf.bad]Invalid target URL:[/] {exc}")
         return 2
 
-    load = _load_from_args(args)
+    try:
+        load = _load_from_args(args)
+    except ValueError as exc:
+        console.print(f"[nf.bad]Invalid argument:[/] {exc}")
+        return 2
     notes = load.clamp()
     for note in notes:
         console.print(f"[nf.warn]{note}[/]")

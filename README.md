@@ -48,7 +48,7 @@ Its only purpose is measuring the performance of an authorized target.
 - Authorization confirmation before every test
 - Target URL validation (scheme, host, port, path; localhost & IPs allowed)
 - Configurable concurrent users, duration, ramp-up, RPS limit, timeouts
-- Conservative safe defaults; hard safety ceiling of **500** concurrent users
+- Conservative safe defaults; hard safety ceiling of **5,000** concurrent users
 - `GET`, `HEAD`, `POST` (with manual JSON body) + custom headers
 - `asyncio` worker pool with a bounded task set and an `asyncio.Semaphore`
 - Gradual ramp-up so traffic is introduced smoothly
@@ -133,7 +133,7 @@ Optional arguments:
 
 | Flag | Meaning |
 |------|---------|
-| `--users N` | Concurrent simulated users (max 500) |
+| `--users N` | Concurrent simulated users (max 5,000) |
 | `--duration S` | Test duration in seconds |
 | `--ramp-up S` | Ramp-up period in seconds |
 | `--rps N` | Aggregate requests/sec limit (`0` = unlimited) |
@@ -142,6 +142,7 @@ Optional arguments:
 | `--header 'Name: Value'` | Custom header (repeatable) |
 | `--timeout S` | Request timeout |
 | `--connect-timeout S` | Connection timeout |
+| `--proxy URL` | Route through a single explicit proxy you supply (e.g. `http://user:pass@host:port`) |
 | `--requests-per-user N` | Requests per user (`0` = unlimited) |
 | `--export [all\|json\|csv\|txt]` | Export after the run |
 | `--yes`, `-y` | Affirm authorization non-interactively |
@@ -176,7 +177,7 @@ configurable starting points and must only be run against authorized systems.
 
 Concurrent users **10**, duration **30 s**, ramp-up **10 s**, RPS **10**.
 NIGHTFALL never defaults to high traffic. The application enforces a hard
-maximum of **500** concurrent users.
+maximum of **5,000** concurrent users.
 
 ---
 
@@ -234,6 +235,47 @@ only — it never claims a site "can handle X users."
 Rising P95/P99 while P50 stays flat usually means the target is starting to
 queue or contend under load. Compare runs at different concurrency levels
 rather than reading a single number in isolation.
+
+---
+
+## Using a proxy
+
+NIGHTFALL can route all requests through **one explicit forward proxy** that
+you supply and are authorized to use — for example your organisation's egress
+proxy or your own load generator:
+
+```bash
+python nightfall.py --url https://you.example.com --proxy http://user:pass@proxy.internal:3128
+```
+
+or set it interactively in **[1] Configure Target**. `http://` and `https://`
+proxies are supported (with optional `user:pass@`). Any credentials in the
+proxy URL are redacted in the UI and are **never** written to exported reports.
+
+By design, NIGHTFALL uses only the single proxy you provide. It does **not**
+fetch, scrape, harvest or rotate proxies, and it does not rotate request
+identities/fingerprints. Rotating traffic across many proxies to spread it
+past rate limits or IP blocks, and randomising fingerprints to evade bot/WAF
+detection, are anonymisation/evasion techniques used to defeat a target's
+defences — this tool is for measuring the performance of a target you are
+authorised to test, not for evading one, so those capabilities are
+deliberately excluded.
+
+## High concurrency and OS limits
+
+The safety ceiling is **5,000** concurrent users. High concurrency opens many
+sockets at once, so on Linux/macOS you may need to raise the open-file-descriptor
+limit before large runs:
+
+```bash
+ulimit -n 65535        # for the current shell, before launching NIGHTFALL
+```
+
+Concurrency is bounded by your machine's CPU, memory, file descriptors and
+network — a single host cannot honestly sustain arbitrarily large numbers. For
+genuinely large-scale or geographically distributed load, run NIGHTFALL (or a
+dedicated tool such as k6, Locust or JMeter) from multiple load generators you
+own, rather than increasing the count on one machine.
 
 ---
 
