@@ -13,14 +13,17 @@ from urllib.parse import urlparse, urlunparse
 # ---------------------------------------------------------------------------
 # Application-level safety limits (see spec sections 6 and 29).
 # ---------------------------------------------------------------------------
-MAX_CONCURRENCY: int = 999_999        # hard ceiling on simulated users
-MAX_DURATION: int = 7 * 24 * 60 * 60    # 24h ceiling to avoid runaway tests
+MAX_CONCURRENCY: int = 999_999          # hard ceiling on simulated users
+MAX_DURATION: int = 7 * 24 * 60 * 60    # 7-day ceiling to avoid runaway tests
 
-# Conservative defaults (spec section 6).
-DEFAULT_USERS: int = 1000
-DEFAULT_DURATION: int = 30000
-DEFAULT_RAMP_UP: int = 1000
-DEFAULT_RPS: int = 1000
+# Default settings: a sensible moderate starting point for a site preparing to
+# accommodate larger traffic. Not a tiny smoke test, but conservative enough to
+# run safely on one host and to ramp up from — increase these as you validate
+# each level. (The application-level ceilings above still apply.)
+DEFAULT_USERS: int = 50
+DEFAULT_DURATION: int = 120
+DEFAULT_RAMP_UP: int = 20
+DEFAULT_RPS: int = 50
 DEFAULT_CONNECT_TIMEOUT: float = 10.0
 DEFAULT_REQUEST_TIMEOUT: float = 30.0
 

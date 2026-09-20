@@ -180,13 +180,39 @@ async def run_cli(args: argparse.Namespace) -> int:
     return 0
 
 
+def _menu_header(console) -> None:
+    """A slim, always-visible header for menu screens."""
+    console.print(
+        "[nf.brand]NIGHTFALL[/] [nf.dim]//[/] [nf.accent]LOAD TESTER[/]"
+        "   [nf.warn][ AUTHORIZED TESTING ONLY ][/]\n"
+    )
+
+
+def _clear_screen(console) -> None:
+    """Clear the terminal (only when attached to a real terminal)."""
+    try:
+        if console.is_terminal:
+            console.clear()
+    except Exception:
+        pass
+
+
+def _screen(console) -> None:
+    """Start a fresh screen: clear, then show the slim header."""
+    _clear_screen(console)
+    _menu_header(console)
+
+
+def _pause(console) -> None:
+    """Wait for the user before clearing the screen for the next action."""
+    try:
+        console.input("\n[nf.dim]Press Enter to return to the menu…[/]")
+    except EOFError:
+        pass
+
+
 async def run_interactive() -> int:
     console = build_console()
-    console.print(startup_panel(console))
-    console.print(
-        "[nf.warn]AUTHORIZED TESTING ONLY — only test systems you own or are "
-        "explicitly authorized to test.[/]\n"
-    )
     state = menu.MenuState(RESULTS_DIR)
 
     actions = {
@@ -198,25 +224,48 @@ async def run_interactive() -> int:
         "6": menu.configure_headers,
     }
 
+    first = True
     while True:
-        console.print()
+        if first:
+            # Show the full banner once, then switch to the slim header.
+            console.print(startup_panel(console))
+            console.print(
+                "[nf.warn]AUTHORIZED TESTING ONLY — only test systems you own "
+                "or are explicitly authorized to test.[/]\n"
+            )
+            first = False
+        else:
+            _screen(console)
+
         menu.render_main_menu(console, state)
-        choice = console.input("[nf.accent]nightfall> [/]").strip()
+        try:
+            choice = console.input("[nf.accent]nightfall> [/]").strip()
+        except EOFError:
+            return 0
 
         if choice == "0":
+            _clear_screen(console)
             console.print("[nf.dim]Exiting NIGHTFALL. Stay authorized.[/]")
             return 0
         if choice in actions:
+            _screen(console)
             actions[choice](console, state)
+            _pause(console)
         elif choice in ("7", "8"):
+            _screen(console)
             await _menu_run_test(console, state, watch=(choice == "8"))
+            _pause(console)
         elif choice == "9":
+            _screen(console)
             if state.last_report is None:
                 console.print("[nf.warn]No results yet. Run a test first.[/]")
             else:
                 menu.render_report(console, state.last_report)
+            _pause(console)
         elif choice == "10":
+            _screen(console)
             menu.export_results(console, state)
+            _pause(console)
         else:
             console.print("[nf.bad]Unknown option.[/]")
 

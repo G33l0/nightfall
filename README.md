@@ -48,7 +48,7 @@ Its only purpose is measuring the performance of an authorized target.
 - Authorization confirmation before every test
 - Target URL validation (scheme, host, port, path; localhost & IPs allowed)
 - Configurable concurrent users, duration, ramp-up, RPS limit, timeouts
-- Conservative safe defaults; hard safety ceiling of **5,000** concurrent users
+- Sensible moderate defaults (50 users / 120 s / 50 RPS); hard ceiling of **999,999** (a guard, not a target)
 - `GET`, `HEAD`, `POST` (with manual JSON body) + custom headers
 - `asyncio` worker pool with a bounded task set and an `asyncio.Semaphore`
 - Gradual ramp-up so traffic is introduced smoothly
@@ -139,7 +139,7 @@ Optional arguments:
 
 | Flag | Meaning |
 |------|---------|
-| `--users N` | Concurrent simulated users (max 5,000) |
+| `--users N` | Concurrent simulated users (max 999,999) |
 | `--duration S` | Test duration in seconds |
 | `--ramp-up S` | Ramp-up period in seconds |
 | `--rps N` | Aggregate requests/sec limit (`0` = unlimited) |
@@ -180,11 +180,14 @@ configurable starting points and must only be run against authorized systems.
 | Heavy Load | 100 | 120 s | 100 |
 | Custom | — | — | — |
 
-### Safe defaults
+### Default settings
 
-Concurrent users **10**, duration **30 s**, ramp-up **10 s**, RPS **10**.
-NIGHTFALL never defaults to high traffic. The application enforces a hard
-maximum of **5,000** concurrent users.
+Default: **50** concurrent users, **120 s** duration, **20 s** ramp-up, **50**
+RPS — a sensible moderate starting point for a site preparing to accommodate
+larger traffic. Ramp up from there as you validate each level. The application
+enforces a hard maximum of **999,999** concurrent users, but a single host
+cannot get anywhere near that (see *High concurrency and OS limits* and
+*Horizontal scale*); treat the ceiling as a guard, not a target.
 
 ---
 
@@ -270,7 +273,7 @@ deliberately excluded.
 
 ## High concurrency and OS limits
 
-The safety ceiling is **5,000** concurrent users. High concurrency opens many
+The safety ceiling is **999,999** concurrent users, but one host cannot reach that. High concurrency opens many
 sockets at once, so on Linux/macOS you may need to raise the open-file-descriptor
 limit before large runs:
 
@@ -335,9 +338,9 @@ denial-of-service tool. The guardrails are:
 
 | Guardrail | What it does | Where |
 |-----------|--------------|-------|
-| `MAX_CONCURRENCY = 5000` | Hard ceiling on concurrent users; higher values are clamped | `core/models.py` |
+| `MAX_CONCURRENCY = 999999` | Hard ceiling on concurrent users; higher values are clamped | `core/models.py` |
 | `MAX_DURATION = 24h` | Ceiling on test duration | `core/models.py` |
-| Conservative defaults (10 users / 30 s / 10 s ramp / 10 RPS) | Never defaults to high traffic | `core/models.py` |
+| Moderate defaults (50 users / 120 s / 20 s ramp / 50 RPS) | Sensible, runnable starting point; not attack scale | `core/models.py` |
 | `LoadConfig.clamp()` | Enforces every min/max and reports what it changed | `core/models.py` |
 | Global RPS rate limiter | Caps aggregate requests/sec; starts empty so no start-up spike | `core/limiter.py` |
 | Bounded worker pool + `asyncio.Semaphore` | Exactly `users` tasks/connections — never an unbounded task set | `core/engine.py` |
