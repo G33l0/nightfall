@@ -130,10 +130,9 @@ def _load_from_args(args: argparse.Namespace) -> LoadConfig:
 
 
 def _do_export(console, report, results_dir: Path, which: str) -> None:
-    from export import export_csv, export_json, export_text
-    from datetime import datetime
+    from export import default_stamp, export_csv, export_json, export_text
 
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    stamp = default_stamp()
     results_dir.mkdir(parents=True, exist_ok=True)
     base = results_dir / f"test_{stamp}"
     written: list[Path] = []
@@ -244,11 +243,11 @@ async def _menu_run_test(console, state: menu.MenuState, watch: bool) -> None:
 def run_merge(args: argparse.Namespace) -> int:
     """Merge JSON reports from multiple nodes into one aggregate summary."""
     import json as _json
-    from datetime import datetime
 
     from rich.panel import Panel
     from rich.table import Table
 
+    from export import default_stamp
     from export.merge import load_reports, merge_reports
 
     console = build_console()
@@ -293,7 +292,7 @@ def run_merge(args: argparse.Namespace) -> int:
     console.print(Panel(obs, title="[nf.accent]OBSERVATIONS[/]", border_style="nf.panel", padding=(1, 2)))
 
     if args.export:
-        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        stamp = default_stamp()
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         out = RESULTS_DIR / f"merged_{stamp}.json"
         with out.open("w", encoding="utf-8") as fh:
