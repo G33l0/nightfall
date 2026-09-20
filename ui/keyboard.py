@@ -33,6 +33,10 @@ class KeyboardListener:
 
     def stop(self) -> None:
         self._stop.set()
+        # Wait briefly for the reader thread to restore the terminal mode so the
+        # next line-mode prompt (e.g. the menu) reads input cleanly.
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=0.5)
 
     async def get(self, timeout: float) -> Optional[str]:
         if not self.enabled:

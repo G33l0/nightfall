@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from rich.align import Align
-from rich.console import Console, Group
+from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
@@ -22,14 +21,9 @@ from core.models import (
     TestConfig,
     parse_target,
 )
-from core.models import (
-    DEFAULT_DURATION,
-    DEFAULT_RAMP_UP,
-    DEFAULT_RPS,
-    DEFAULT_USERS,
-)
+from core.models import DEFAULT_RPS, validate_proxy
 from export import export_all
-from ui.theme import AUTHORIZATION_NOTICE, startup_panel
+from ui.theme import AUTHORIZATION_NOTICE
 
 # Presets (spec section 21): (users, duration, rps, ramp_up)
 PROFILES = {
@@ -98,9 +92,25 @@ def _render_status_line(console: Console, state: MenuState) -> None:
         ("duration: ", "nf.dim"), (f"{l.duration}s", "nf.value"), ("   ", ""),
         ("ramp: ", "nf.dim"), (f"{l.ramp_up}s", "nf.value"), ("   ", ""),
         ("rps: ", "nf.dim"), (str(l.rps or "unlimited"), "nf.value"), ("   ", ""),
-        ("method: ", "nf.dim"), (l.method.value, "nf.value"),
+        ("method: ", "nf.dim"), (l.method.value, "nf.value"), ("   ", ""),
+        ("proxy: ", "nf.dim"), (_redact_proxy(l.proxy) if l.proxy else "none", "nf.value"),
     )
     console.print(Panel(summary, border_style="nf.dim", padding=(0, 1)))
+
+
+def _redact_proxy(proxy: str) -> str:
+    """Hide any credentials embedded in a proxy URL before display."""
+    from urllib.parse import urlparse, urlunparse
+
+    try:
+        p = urlparse(proxy)
+        if p.username or p.password:
+            host = p.hostname or ""
+            netloc = f"***@{host}" + (f":{p.port}" if p.port else "")
+            return urlunparse((p.scheme, netloc, p.path, "", "", ""))
+    except ValueError:
+        return "(set)"
+    return proxy
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +135,32 @@ def configure_target(console: Console, state: MenuState) -> None:
         for label, value in target.summary_lines():
             table.add_row(label, value)
         console.print(Panel(table, title="[nf.accent]TARGET[/]", border_style="nf.panel"))
+        _configure_proxy(console, state)
         return
+
+
+def _configure_proxy(console: Console, state: MenuState) -> None:
+    """Optional: route through a single explicit proxy the tester controls."""
+    console.print(
+        "[nf.dim]Optional: route through a single proxy you supply and are "
+        "authorized to use (e.g. your corporate egress). NIGHTFALL never "
+        "fetches, harvests or rotates proxies.[/]"
+    )
+    current = state.load.proxy or ""
+    raw = Prompt.ask(
+        "[nf.accent]Proxy URL[/] (blank for none)", default=current, show_default=bool(current)
+    )
+    raw = raw.strip()
+    if not raw:
+        state.load.proxy = None
+        console.print("[nf.dim](no proxy — requests sent directly)[/]")
+        return
+    try:
+        state.load.proxy = validate_proxy(raw)
+        console.print(f"[nf.ok]Proxy set:[/] {_redact_proxy(state.load.proxy)}")
+    except ValueError as exc:
+        console.print(f"[nf.bad]Invalid proxy:[/] {exc}")
+        state.load.proxy = None
 
 
 def configure_load(console: Console, state: MenuState) -> None:
@@ -294,6 +329,9 @@ def confirm_authorization(console: Console, config: TestConfig, assume_yes: bool
     body.append(f"{l.ramp_up} seconds\n\n", style="nf.value")
     body.append("RPS limit:\n", style="nf.label")
     body.append(f"{l.rps or 'unlimited'}\n\n", style="nf.value")
+    if l.proxy:
+        body.append("Proxy:\n", style="nf.label")
+        body.append(f"{_redact_proxy(l.proxy)}\n\n", style="nf.value")
     body.append("Type:\n", style="nf.label")
     body.append(f"HTTP load test ({l.method.value})\n", style="nf.value")
     console.print(Panel(body, title="[nf.bad]AUTHORIZATION REQUIRED[/]", border_style="nf.bad", padding=(1, 2)))

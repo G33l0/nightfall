@@ -21,12 +21,11 @@ import sys
 from pathlib import Path
 
 from core.models import (
-    DEFAULT_CONNECT_TIMEOUT,
-    DEFAULT_REQUEST_TIMEOUT,
     LoadConfig,
     Method,
     TestConfig,
     parse_target,
+    validate_proxy,
 )
 from ui import menu
 from ui.runner import run_test
@@ -60,8 +59,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--connect-timeout", type=float, dest="connect_timeout",
         help="Connection timeout in seconds.",
     )
+    p.add_argument(
+        "--proxy",
+        metavar="URL",
+        help=(
+            "Route requests through a single explicit forward proxy you supply "
+            "and are authorized to use (e.g. http://user:pass@host:port). "
+            "NIGHTFALL never fetches, harvests or rotates proxies."
+        ),
+    )
     p.add_argument("--requests-per-user", type=int, dest="requests_per_user",
                    help="Requests per user (0 = unlimited).")
+    p.add_argument(
+        "--merge",
+        nargs="+",
+        metavar="REPORT.json",
+        help=(
+            "Horizontal scale: merge JSON reports from independent NIGHTFALL "
+            "runs on hosts you own into one aggregate summary. No test is run. "
+            "Combine with --export to write the merged report."
+        ),
+    )
     p.add_argument(
         "--export",
         nargs="?",
@@ -106,14 +124,15 @@ def _load_from_args(args: argparse.Namespace) -> LoadConfig:
         if ":" in raw:
             name, _, value = raw.partition(":")
             load.headers[name.strip()] = value.strip()
+    if getattr(args, "proxy", None):
+        load.proxy = validate_proxy(args.proxy)
     return load
 
 
 def _do_export(console, report, results_dir: Path, which: str) -> None:
-    from export import export_csv, export_json, export_text
-    from datetime import datetime
+    from export import default_stamp, export_csv, export_json, export_text
 
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    stamp = default_stamp()
     results_dir.mkdir(parents=True, exist_ok=True)
     base = results_dir / f"test_{stamp}"
     written: list[Path] = []
@@ -137,7 +156,11 @@ async def run_cli(args: argparse.Namespace) -> int:
         console.print(f"[nf.bad]Invalid target URL:[/] {exc}")
         return 2
 
-    load = _load_from_args(args)
+    try:
+        load = _load_from_args(args)
+    except ValueError as exc:
+        console.print(f"[nf.bad]Invalid argument:[/] {exc}")
+        return 2
     notes = load.clamp()
     for note in notes:
         console.print(f"[nf.warn]{note}[/]")
@@ -217,6 +240,67 @@ async def _menu_run_test(console, state: menu.MenuState, watch: bool) -> None:
         menu.export_results(console, state)
 
 
+def run_merge(args: argparse.Namespace) -> int:
+    """Merge JSON reports from multiple nodes into one aggregate summary."""
+    import json as _json
+
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from export import default_stamp
+    from export.merge import load_reports, merge_reports
+
+    console = build_console()
+    console.print(startup_panel())
+
+    paths = [Path(p) for p in args.merge]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        console.print(f"[nf.bad]Report file(s) not found:[/] {', '.join(missing)}")
+        return 2
+    try:
+        reports = load_reports(paths)
+        merged = merge_reports(reports)
+    except (ValueError, _json.JSONDecodeError) as exc:
+        console.print(f"[nf.bad]Could not merge reports:[/] {exc}")
+        return 2
+
+    lat = merged["latency"]
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="nf.label")
+    grid.add_column(style="nf.value", justify="right")
+    grid.add_row("Nodes merged", str(merged["node_count"]))
+    grid.add_row("Target(s)", ", ".join(merged["targets"]))
+    grid.add_row("Configured users (sum)", f"{merged['configured_users_total']:,}")
+    grid.add_row("Peak active users (sum)", f"{merged['peak_active_users_total']:,}")
+    grid.add_row("", "")
+    grid.add_row("Total requests", f"{merged['total_requests']:,}")
+    grid.add_row("Successful", f"{merged['successful_requests']:,}")
+    grid.add_row("Failed", f"{merged['failed_requests']:,}")
+    grid.add_row("Success rate", f"{merged['success_rate']:.2f}%")
+    grid.add_row("", "")
+    grid.add_row("Aggregate avg RPS", f"{merged['aggregate_average_rps']:.1f}")
+    grid.add_row("Peak RPS (sum, approx)", f"{merged['peak_requests_per_second_sum']:.1f}")
+    grid.add_row("", "")
+    grid.add_row("P50 (approx)", f"{lat['p50_ms']:.0f} ms")
+    grid.add_row("P95 (approx)", f"{lat['p95_ms']:.0f} ms")
+    grid.add_row("P99 (approx)", f"{lat['p99_ms']:.0f} ms")
+    grid.add_row("Max", f"{lat['max_ms']:.0f} ms")
+    console.print(Panel(grid, title="[nf.ok]MERGED REPORT (horizontal scale)[/]", border_style="nf.ok", padding=(1, 2)))
+
+    obs = "\n".join(f"• {o}" for o in merged["observations"])
+    console.print(Panel(obs, title="[nf.accent]OBSERVATIONS[/]", border_style="nf.panel", padding=(1, 2)))
+
+    if args.export:
+        stamp = default_stamp()
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        out = RESULTS_DIR / f"merged_{stamp}.json"
+        with out.open("w", encoding="utf-8") as fh:
+            _json.dump(merged, fh, indent=2, ensure_ascii=False)
+        console.print(f"[nf.ok]Merged report written:[/] {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.WARNING,
@@ -225,6 +309,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.merge:
+            return run_merge(args)
         if args.url:
             return asyncio.run(run_cli(args))
         return asyncio.run(run_interactive())
