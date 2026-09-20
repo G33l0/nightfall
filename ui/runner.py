@@ -27,7 +27,9 @@ async def run_test(
 ) -> TestReport:
     """Execute a load test, rendering the live dashboard, and return its report."""
     engine = LoadTestEngine(config)
-    dashboard = Dashboard(engine.metrics, config.target.url, config.load.duration)
+    dashboard = Dashboard(
+        engine.metrics, config.target.url, config.load.duration, console=console
+    )
     keys = KeyboardListener()
 
     stop_event = asyncio.Event()

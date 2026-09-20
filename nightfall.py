@@ -148,7 +148,7 @@ def _do_export(console, report, results_dir: Path, which: str) -> None:
 
 async def run_cli(args: argparse.Namespace) -> int:
     console = build_console()
-    console.print(startup_panel())
+    console.print(startup_panel(console))
 
     try:
         target = parse_target(args.url)
@@ -182,7 +182,7 @@ async def run_cli(args: argparse.Namespace) -> int:
 
 async def run_interactive() -> int:
     console = build_console()
-    console.print(startup_panel())
+    console.print(startup_panel(console))
     console.print(
         "[nf.warn]AUTHORIZED TESTING ONLY — only test systems you own or are "
         "explicitly authorized to test.[/]\n"
@@ -251,7 +251,7 @@ def run_merge(args: argparse.Namespace) -> int:
     from export.merge import load_reports, merge_reports
 
     console = build_console()
-    console.print(startup_panel())
+    console.print(startup_panel(console))
 
     paths = [Path(p) for p in args.merge]
     missing = [str(p) for p in paths if not p.is_file()]

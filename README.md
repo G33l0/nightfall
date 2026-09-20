@@ -90,7 +90,11 @@ pip install -r requirements.txt
 python nightfall.py
 ```
 
-Works in Windows Terminal, PowerShell, Linux, macOS Terminal and Termux.
+Works in Windows Terminal, PowerShell, Linux, macOS Terminal and Termux. The
+UI is responsive: the banner shrinks through full / medium / compact variants
+to match the terminal width, and the live dashboard switches from a two-column
+layout to a single stacked column on narrow screens (e.g. a phone in Termux),
+so nothing wraps into an unreadable mess.
 
 ---
 
