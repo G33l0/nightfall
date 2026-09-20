@@ -14,13 +14,13 @@ from urllib.parse import urlparse, urlunparse
 # Application-level safety limits (see spec sections 6 and 29).
 # ---------------------------------------------------------------------------
 MAX_CONCURRENCY: int = 999_999        # hard ceiling on simulated users
-MAX_DURATION: int = 7 * 24 * 60 * 60    # 24h ceiling to avoid runaway tests
+MAX_DURATION: int = 7 * 24 * 60 * 60    # 24h for 7days ceiling to avoid runaway tests
 
 # Conservative defaults (spec section 6).
-DEFAULT_USERS: int = 1000
+DEFAULT_USERS: int = 900000
 DEFAULT_DURATION: int = 30000
-DEFAULT_RAMP_UP: int = 1000
-DEFAULT_RPS: int = 1000
+DEFAULT_RAMP_UP: int = 5
+DEFAULT_RPS: int = 100000
 DEFAULT_CONNECT_TIMEOUT: float = 10.0
 DEFAULT_REQUEST_TIMEOUT: float = 30.0
 
